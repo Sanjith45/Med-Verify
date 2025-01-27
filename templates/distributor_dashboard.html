@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Distributor Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table th, table td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Distributor Dashboard</h1>
+    
+    <h2>Available Products:</h2>
+    <table>
+        <tr>
+            <th>Manufacturer</th>
+            <th>Product Name</th>
+            <th>Quantity</th>
+            <th>Weight</th>
+            <th>Action</th>
+        </tr>
+        {% for product in products %}
+        <tr>
+            <td><a href="{{ url_for('manufacturer_profile', name=product.manufacturer) }}">{{ product.manufacturer }}</a></td>
+            <td>{{ product.name }}</td>
+            <td>{{ product.quantity }}</td>
+            <td>{{ product.weight }}</td>
+            <td><button>Purchase</button></td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href="{{ url_for('home') }}" class="button">Return to Home</a>
+</body>
+</html>

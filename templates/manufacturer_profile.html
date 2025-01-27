@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manufacturer Profile</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .profile-info {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .profile-info h2 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Manufacturer Profile</h1>
+    
+    <div class="profile-info">
+        <h2>{{ manufacturer.manufacturer_name }}</h2>
+        <p><strong>Company Name:</strong> {{ manufacturer.company_name }}</p>
+        <p><strong>Contact Email:</strong> {{ manufacturer.email }}</p>
+    </div>
+</body>
+</html>

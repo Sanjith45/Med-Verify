@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Home</title>
+</head>
+<body>
+<div class="container">
+    <h1>Welcome to the Portal</h1>
+    
+    <!-- Manufacturer Option -->
+    <div class="option">
+        <a href="/manufacturer/signup" class="btn">Manufacturer</a>
+    </div>
+
+    <!-- User Option -->
+    <div class="option">
+        
+        <a href="/user/signup" class="btn">User</a>
+    </div>
+
+    <!-- Distributor Option -->
+    <div class="option">
+        <a href="/distributor/signup" class="btn">Distributor</a>
+    </div>
+</div>
+</body>
+</html>

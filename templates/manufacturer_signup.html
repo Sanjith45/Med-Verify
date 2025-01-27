@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manufacturer Signup</title>
+</head>
+<body>
+    <h1>Manufacturer Signup</h1>
+    <form action="/manufacturer/signup" method="POST">  <!-- Corrected action -->
+        <label for="company_name">Company Name:</label>
+        <input type="text" id="company_name" name="company_name" required><br><br>
+        <label for="manufacturer_name">Manufacturer Name:</label>
+        <input type="text" id="manufacturer_name" name="manufacturer_name" required><br><br>
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required><br><br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required><br><br>
+        <button type="submit">Signup</button>
+    </form>
+
+    <p>Already have an account? <a href="/manufacturer/login">Login</a></p>
+</body>
+</html>

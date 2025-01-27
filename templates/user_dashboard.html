@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .profile-info {
+            margin: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .profile-info h2 {
+            text-align: center;
+        }
+        .profile-info p {
+            margin: 5px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-top: 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>User Dashboard</h1>
+    
+    <div class="profile-info">
+        <h2>Profile</h2>
+        <p><strong>Name:</strong> {{ profile.name }}</p>
+        <p><strong>Email:</strong> {{ profile.email }}</p>
+    </div>
+
+    <a href="{{ url_for('home') }}" class="button">Return to Home</a>
+</body>
+</html>
