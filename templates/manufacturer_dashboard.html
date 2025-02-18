@@ -33,7 +33,6 @@
 <body>
     <h1>Manufacturer Dashboard</h1>
     
-    <!-- Product Add Form -->
     <div class="form-container">
         <h2>Add Product</h2>
         <form method="post">
@@ -44,26 +43,79 @@
         </form>
     </div>
 
-    <!-- View Added Products -->
     <div class="product-container">
         <h2>Products:</h2>
-
         <table>
             <tr>
                 <th>Product Name</th>
                 <th>Quantity</th>
                 <th>Weight</th>
+                <th>QR Code</th>
             </tr>
             {% for product in products %}
             <tr>
-                <td>{{ product['name'] }}</td>
-                <td>{{ product['quantity'] }}</td>
-                <td>{{ product['weight'] }}</td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.quantity }}</td>
+                <td>{{ product.weight }}</td>
+                <td>
+                        {% if product.qr_code %}
+                            <img src="data:image/png;base64,{{ product.qr_code }}" alt="QR Code" width="100">
+                        {% else %}
+                            No QR Code
+                        {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </table>
-    
+        
     </div>
+
+    <div class="order-container">
+        <h2>Order Requests:</h2>
+        <table>
+            <tr>
+                <th>Distributor</th>
+                <th>Product Name</th>
+                <th>Action</th>
+            </tr>
+            {% for order in orders %}
+            <tr>
+                <td>{{ order.distributor }}</td>
+                <td>{{ order.product_name }}</td>
+                <td>{{ order.quantity }}</td>
+                <td>{{ order.weight }}</td>
+                <td>{{ order.status }}</td>
+                <td>
+                    {% if order.status == "Pending" %}
+                        <form action="{{ url_for('update_order_status') }}" method="post">
+                            <input type="hidden" name="order_id" value="{{ order._id }}">
+                            <button type="submit" name="status" value="Accepted">Accept</button>
+                            <button type="submit" name="status" value="Rejected" style="background-color: red;">Reject</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            
+        </table>
+    </div>
+    <h2>Transaction History:</h2>
+<table>
+    <tr>
+        <th>Distributor</th>
+        <th>Product Name</th>
+        <th>Status</th>
+    </tr>
+    {% for transaction in transactions %}
+    <tr>
+        <td>{{ transaction.distributor }}</td>
+        <td>{{ transaction.product_name }}</td>
+        <td>{{ transaction.status }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+
     <a href="{{ url_for('home') }}" class="button">Return to Home</a>
 </body>
 </html>

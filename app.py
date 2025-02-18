@@ -1,6 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from pymongo import MongoClient
 from flask_bcrypt import Bcrypt
+from bson.objectid import ObjectId
+import qrcode  # Import the qrcode module
+import base64  # To encode the QR code to base64
+from io import BytesIO  # To handle the in-memory image for the QR code
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Change this in production
@@ -15,6 +19,8 @@ users_collection = db["users"]
 manufacturers_collection = db["manufacturer"]
 distributors_collection = db["distributor"]
 products_collection = db["products"]
+orders_collection = db["orders"]
+transactions_collection = db["transactions"]  # New Collection for Transactions
 
 @app.route("/")
 def home():
@@ -152,7 +158,7 @@ def user_signup():
     
     return render_template("user_signup.html")
 
-# Manufacturer dashboard
+# Manufacturer Dashboard
 @app.route("/manufacturer_dashboard", methods=["GET", "POST"])
 def manufacturer_dashboard():
     if "username" not in session or session.get("role") != "Manufacturer":
@@ -160,35 +166,63 @@ def manufacturer_dashboard():
         return redirect(url_for("home"))
     
     username = session["username"]
-    
-    # Add product to database
+
+    # Add Product
     if request.method == "POST":
         product_name = request.form["product_name"]
         quantity = int(request.form["quantity"])
         weight = request.form["weight"]
-        
+
+        # Generate QR Code
+        qr_data = f"{product_name},{quantity},{weight},{username}"  # Data for the QR code
+        qr = qrcode.make(qr_data)
+        buffered = BytesIO()
+        qr.save(buffered, format="PNG")
+        qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")  # Base64 encoding for storing in DB
+
+        # Insert product with QR Code into the database
         products_collection.insert_one({
             "name": product_name,
             "quantity": quantity,
             "weight": weight,
-            "manufacturer": username
+            "manufacturer": username,
+            "qr_code": qr_code_base64  # Save the QR code base64 string
         })
         flash("Product added successfully!", "success")
         return redirect(url_for("manufacturer_dashboard"))
 
-    # Fetch all products for the manufacturer
-    products = products_collection.find({"manufacturer": username})
-    return render_template("manufacturer_dashboard.html", products=products)
+    # Fetch Manufacturer's Products, Pending Orders, and Transaction History
+    products = list(products_collection.find({"manufacturer": username}))
+    orders = list(orders_collection.find({"manufacturer": username, "status": "Pending"}))
+    transactions = list(transactions_collection.find({"manufacturer": username}))
 
-# Distributor dashboard
+    return render_template("manufacturer_dashboard.html", products=products, orders=orders, transactions=transactions)
+
 @app.route("/distributor_dashboard")
 def distributor_dashboard():
-    if "username" not in session or session.get("role") != "Distributor":
+    if "username" not in session or session["role"] != "Distributor":
         flash("You must log in as a Distributor to access this dashboard.", "error")
         return redirect(url_for("home"))
-    
-    products = products_collection.find()
-    return render_template("distributor_dashboard.html", products=products)
+
+    username = session["username"]
+
+    # Fetch all available products (excluding accepted orders)
+    products = list(products_collection.find())
+
+    filtered_products = []
+    for product in products:
+        existing_order = orders_collection.find_one({
+            "product_name": product["name"],
+            "distributor": username
+        })
+        if not existing_order or existing_order["status"] == "Rejected":
+            product["status"] = "Available"
+            filtered_products.append(product)
+
+    # Fetch Distributor's Accepted Orders
+    purchases = list(orders_collection.find({"distributor": username, "status": "Accepted"}))
+
+    return render_template("distributor_dashboard.html", products=filtered_products, purchases=purchases)
 
 # User dashboard
 @app.route("/user_dashboard")
@@ -210,12 +244,51 @@ def manufacturer_profile(name):
     flash("Manufacturer not found.", "error")
     return redirect(url_for("distributor_dashboard"))
 
-# Logout route
-@app.route("/logout")
-def logout():
-    session.clear()
-    flash("Logged out successfully!", "success")
-    return redirect(url_for("home"))
+# Place Order (Distributor)
+@app.route("/place_order", methods=["POST"])
+def place_order():
+    if "username" not in session or session.get("role") != "Distributor":
+        flash("You must log in as a Distributor to place orders.", "error")
+        return redirect(url_for("home"))
+
+    distributor = session["username"]
+    product_id = request.form["product_id"]
+    product = products_collection.find_one({"_id": ObjectId(product_id)})
+
+    if product:
+        order = {
+            "product_name": product["name"],
+            "manufacturer": product["manufacturer"],
+            "distributor": distributor,
+            "status": "Pending",
+        }
+        orders_collection.insert_one(order)
+        flash("Order placed successfully!", "success")
+
+    return redirect(url_for("distributor_dashboard"))
+
+# Accept/Reject Order (Manufacturer)
+@app.route("/update_order_status", methods=["POST"])
+def update_order_status():
+    order_id = request.form["order_id"]
+    new_status = request.form["status"]
+
+    order = orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        flash("Order not found.", "error")
+        return redirect(url_for("manufacturer_dashboard"))
+
+    orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {"status": new_status}}
+    )
+
+    # If accepted, move order to transaction history
+    if new_status == "Accepted":
+        transactions_collection.insert_one(order)
+
+    flash(f"Order status updated to {new_status}.", "success")
+    return redirect(url_for("manufacturer_dashboard"))
 
 if __name__ == "__main__":
     app.run(debug=True)

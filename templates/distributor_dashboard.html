@@ -9,6 +9,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
+            margin-bottom: 20px;
         }
         table th, table td {
             padding: 8px;
@@ -37,18 +38,47 @@
             <th>Product Name</th>
             <th>Quantity</th>
             <th>Weight</th>
+            <th>Status</th>
             <th>Action</th>
         </tr>
         {% for product in products %}
-        <tr>
-            <td><a href="{{ url_for('manufacturer_profile', name=product.manufacturer) }}">{{ product.manufacturer }}</a></td>
-            <td>{{ product.name }}</td>
-            <td>{{ product.quantity }}</td>
-            <td>{{ product.weight }}</td>
-            <td><button>Purchase</button></td>
-        </tr>
-        {% endfor %}
+<tr>
+    <td>{{ product.manufacturer }}</td>
+    <td>{{ product.name }}</td>
+    <td>{{ product.quantity }}</td>
+    <td>{{ product.weight }}</td>
+    <td>
+        {% if product.status == "Pending" %}
+            <button disabled style="background-color: gray;">Pending</button>
+        {% elif product.status == "Accepted" %}
+            <button disabled style="background-color: green;">Accepted</button>
+        {% elif product.status == "Rejected" %}
+            <button disabled style="background-color: red;">Rejected</button>
+        {% else %}
+            <form action="{{ url_for('place_order') }}" method="post">
+                <input type="hidden" name="product_id" value="{{ product._id }}">
+                <button type="submit">Purchase</button>
+            </form>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+
     </table>
+    
+    <h2>My Purchases:</h2>
+<table>
+    <tr>
+        <th>Product Name</th>
+        <th>Status</th>
+    </tr>
+    {% for purchase in purchases %}
+    <tr>
+        <td>{{ purchase.product_name }}</td>
+        <td>{{ purchase.status }}</td>
+    </tr>
+    {% endfor %}
+</table>    
     <a href="{{ url_for('home') }}" class="button">Return to Home</a>
 </body>
 </html>
