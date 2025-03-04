@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blockchain Transactions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table th, table td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Blockchain Transactions</h1>
+    <table>
+        <tr>
+            <th>Transaction Hash</th>
+            <th>Product Name</th>
+            <th>Manufacturer</th>
+            <th>Distributor</th>
+            <th>Status</th>
+            <th>Value (ETH)</th>
+            <th>Block Number</th>
+        </tr>
+        {% for tx in transactions %}
+        <tr>
+            <td>
+                {% if tx.hash != "Not on Blockchain" %}
+                    <a href="https://etherscan.io/tx/{{ tx.hash }}" target="_blank">{{ tx.hash }}</a>
+                {% else %}
+                    Not on Blockchain
+                {% endif %}
+            </td>
+            <td>{{ tx.product_name }}</td>
+            <td>{{ tx.manufacturer }}</td>
+            <td>{{ tx.distributor }}</td>
+            <td>{{ tx.status }}</td>
+            <td>{{ tx.value }}</td>
+            <td>{{ tx.block }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href="{{ url_for('home') }}">Return to Home</a>
+</body>
+</html>

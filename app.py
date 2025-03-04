@@ -1,26 +1,221 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from web3 import Web3
 from pymongo import MongoClient
 from flask_bcrypt import Bcrypt
 from bson.objectid import ObjectId
-import qrcode  # Import the qrcode module
-import base64  # To encode the QR code to base64
-from io import BytesIO  # To handle the in-memory image for the QR code
+import qrcode
+import base64
+from io import BytesIO
+import json
+import time
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"  # Change this in production
+app.secret_key = "supersecretkey"
 bcrypt = Bcrypt(app)
 
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017/")
 db = client["auth_app"]
 
-# Using different collections for different roles
 users_collection = db["users"]
-manufacturers_collection = db["manufacturer"]
-distributors_collection = db["distributor"]
+manufacturers_collection = db["manufacturers"]
+distributors_collection = db["distributors"]
 products_collection = db["products"]
 orders_collection = db["orders"]
-transactions_collection = db["transactions"]  # New Collection for Transactions
+transactions_collection = db["transactions"]
+
+# Ethereum Blockchain Connection
+ganache_url = "http://127.0.0.1:7545"
+web3 = Web3(Web3.HTTPProvider(ganache_url))
+web3.eth.default_account = web3.eth.accounts[0]
+
+# Smart Contract ABI and Address
+contract_address = "0xd9145CCE52D386f254917e481eB44e9943F39138"
+contract_abi =  [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": False,
+      "inputs": [
+        {
+          "indexed": True,
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "indexed": True,
+          "internalType": "address",
+          "name": "manufacturer",
+          "type": "address"
+        },
+        {
+          "indexed": True,
+          "internalType": "address",
+          "name": "distributor",
+          "type": "address"
+        }
+      ],
+      "name": "ProductAccepted",
+      "type": "event"
+    },
+    {
+      "anonymous": False,
+      "inputs": [
+        {
+          "indexed": True,
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "indexed": True,
+          "internalType": "address",
+          "name": "distributor",
+          "type": "address"
+        }
+      ],
+      "name": "ProductRequested",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": True
+    },
+    {
+      "inputs": [],
+      "name": "productCounter",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": True
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "products",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "internalType": "address",
+          "name": "manufacturer",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "distributor",
+          "type": "address"
+        },
+        {
+          "internalType": "bool",
+          "name": "isAccepted",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": True
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "_name",
+          "type": "string"
+        }
+      ],
+      "name": "requestProduct",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_productId",
+          "type": "uint256"
+        }
+      ],
+      "name": "acceptRequest",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ]  # Add your compiled contract ABI here
+contract = web3.eth.contract(address=contract_address, abi=contract_abi)
+
+@app.route("/add_transaction", methods=["POST"])
+def add_transaction():
+    if "username" not in session or session.get("role") != "Manufacturer":
+        flash("Unauthorized access.", "error")
+        return redirect(url_for("home"))
+
+    order_id = request.form["order_id"]
+    order = orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        flash("Order not found.", "error")
+        return redirect(url_for("manufacturer_dashboard"))
+
+    product_id = order["product_id"]  # Assuming products have an ID
+    try:
+        tx_hash = contract.functions.acceptRequest(int(product_id)).transact({'from': web3.eth.default_account})
+        receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if receipt.status == 1:  # Check if transaction was successful
+            transactions_collection.insert_one({
+                "product_name": order["product_name"],
+                "manufacturer": order["manufacturer"],
+                "distributor": order["distributor"],
+                "status": "Accepted",
+                "timestamp": str(time.time()),
+                "tx_hash": tx_hash.hex()
+            })
+            flash("Transaction recorded successfully on Ethereum blockchain!", "success")
+        else:
+            flash("Blockchain transaction failed!", "error")
+    except Exception as e:
+        flash(f"Blockchain transaction error: {str(e)}", "error")
+
+    return redirect(url_for("manufacturer_dashboard"))
+
+@app.route("/blockchain", methods=["GET"])
+def get_blockchain():
+    return "Ethereum blockchain transactions stored via smart contract.", 200
+
 
 @app.route("/")
 def home():
@@ -166,37 +361,36 @@ def manufacturer_dashboard():
         return redirect(url_for("home"))
     
     username = session["username"]
-
-    # Add Product
+    
     if request.method == "POST":
         product_name = request.form["product_name"]
         quantity = int(request.form["quantity"])
         weight = request.form["weight"]
 
-        # Generate QR Code
-        qr_data = f"{product_name},{quantity},{weight},{username}"  # Data for the QR code
+        qr_data = f"{product_name},{quantity},{weight},{username}"
         qr = qrcode.make(qr_data)
         buffered = BytesIO()
         qr.save(buffered, format="PNG")
-        qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")  # Base64 encoding for storing in DB
+        qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        # Insert product with QR Code into the database
         products_collection.insert_one({
             "name": product_name,
             "quantity": quantity,
             "weight": weight,
             "manufacturer": username,
-            "qr_code": qr_code_base64  # Save the QR code base64 string
+            "qr_code": qr_code_base64
         })
         flash("Product added successfully!", "success")
         return redirect(url_for("manufacturer_dashboard"))
 
-    # Fetch Manufacturer's Products, Pending Orders, and Transaction History
     products = list(products_collection.find({"manufacturer": username}))
-    orders = list(orders_collection.find({"manufacturer": username, "status": "Pending"}))
+    orders = list(orders_collection.find({"manufacturer": username}))
+    transactions = list(transactions_collection.find({"manufacturer": username}))
+
     transactions = list(transactions_collection.find({"manufacturer": username}))
 
     return render_template("manufacturer_dashboard.html", products=products, orders=orders, transactions=transactions)
+
 
 @app.route("/distributor_dashboard")
 def distributor_dashboard():
@@ -262,12 +456,53 @@ def place_order():
             "distributor": distributor,
             "status": "Pending",
         }
-        orders_collection.insert_one(order)
+        orders_collection.insert_one(order)  # ✅ Store in orders_collection, not transactions_collection
         flash("Order placed successfully!", "success")
+
 
     return redirect(url_for("distributor_dashboard"))
 
 # Accept/Reject Order (Manufacturer)
+@app.route("/view_transactions", methods=["GET"])
+def view_transactions():
+    latest_block = web3.eth.block_number
+    blockchain_transactions = []
+
+    # Fetch last 10 blocks
+    for i in range(latest_block, max(latest_block - 10, 0), -1):
+        block = web3.eth.get_block(i, full_transactions=True)
+        for tx in block.transactions:
+            blockchain_transactions.append({
+                "hash": tx.hash.hex(),
+                "from": tx["from"],
+                "to": tx["to"],
+                "value": web3.from_wei(tx["value"], "ether"),
+                "block": tx["blockNumber"],
+            })
+
+    # Fetch transactions from MongoDB
+    db_transactions = list(transactions_collection.find())
+
+    # Merge MongoDB transactions with blockchain transactions
+    merged_transactions = []
+    for db_tx in db_transactions:
+        tx_hash = db_tx.get("tx_hash", "Not on Blockchain")
+        eth_tx = next((tx for tx in blockchain_transactions if tx["hash"] == tx_hash), None) if tx_hash != "Not on Blockchain" else None
+
+        merged_transactions.append({
+            "hash": tx_hash,
+            "manufacturer": db_tx["manufacturer"],
+            "distributor": db_tx["distributor"],
+            "product_name": db_tx["product_name"],
+            "status": db_tx["status"],
+            "value": eth_tx["value"] if eth_tx else "N/A",
+            "block": eth_tx["block"] if eth_tx else "N/A",
+        })
+
+
+
+    return render_template("blockchain_transactions.html", transactions=merged_transactions)
+
 @app.route("/update_order_status", methods=["POST"])
 def update_order_status():
     order_id = request.form["order_id"]
@@ -283,12 +518,40 @@ def update_order_status():
         {"$set": {"status": new_status}}
     )
 
-    # If accepted, move order to transaction history
     if new_status == "Accepted":
-        transactions_collection.insert_one(order)
+        try:
+            product = products_collection.find_one({"name": order["product_name"], "manufacturer": order["manufacturer"]})
+            if not product:
+                flash("Product not found in database.", "error")
+                return redirect(url_for("manufacturer_dashboard"))
+
+            product_id = str(product["_id"])  # Convert ObjectId to string
+            int_product_id = int(product_id[:8], 16)  # Convert first 8 characters (hex) to int
+            print(f"🟢 Converted product ID: {int_product_id}")
+
+            tx_hash = contract.functions.acceptRequest(int_product_id).transact({'from': web3.eth.default_account})
+
+            receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+            print(f"✅ Transaction Successful! Hash: {tx_hash.hex()}")
+
+            if receipt.status == 1:  # ✅ Transaction successful
+                order.pop("_id", None)  # Remove MongoDB _id to prevent duplication
+                order["tx_hash"] = tx_hash.hex()  # Store transaction hash
+                order["status"] = "Accepted"
+
+                transactions_collection.insert_one(order)
+                flash("Transaction recorded on Ethereum blockchain!", "success")
+            else:
+                flash("Blockchain transaction failed!", "error")
+        except Exception as e:
+            flash(f"Blockchain transaction error: {str(e)}", "error")
+            print(f"🔴 Blockchain transaction failed: {str(e)}")
 
     flash(f"Order status updated to {new_status}.", "success")
     return redirect(url_for("manufacturer_dashboard"))
 
+
 if __name__ == "__main__":
     app.run(debug=True)
+
