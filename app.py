@@ -359,34 +359,51 @@ def manufacturer_dashboard():
     if "username" not in session or session.get("role") != "Manufacturer":
         flash("You must log in as a Manufacturer to access this dashboard.", "error")
         return redirect(url_for("home"))
-    
+
     username = session["username"]
-    
+
     if request.method == "POST":
         product_name = request.form["product_name"]
         quantity = int(request.form["quantity"])
         weight = request.form["weight"]
+        
+        # Store the product in the database first to get the _id
+        product_id = products_collection.insert_one({
+            "name": product_name,
+            "quantity": quantity,
+            "weight": weight,
+            "manufacturer": username
+        }).inserted_id
 
-        qr_data = f"{product_name},{quantity},{weight},{username}"
-        qr = qrcode.make(qr_data)
+        # Create QR Code Data
+        qr_data = {
+            "product_name": product_name,
+            "quantity": quantity,
+            "weight": weight,
+            "manufacturer": username,
+            "handoff_date": None,  # This will be updated when the transaction is confirmed
+            "tx_hash": None,  # This will be updated later
+            "product_id": str(product_id)
+        }
+
+        # Generate QR Code
+        qr_json = json.dumps(qr_data)  # Convert dictionary to JSON string
+        qr = qrcode.make(qr_json)
         buffered = BytesIO()
         qr.save(buffered, format="PNG")
         qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        products_collection.insert_one({
-            "name": product_name,
-            "quantity": quantity,
-            "weight": weight,
-            "manufacturer": username,
-            "qr_code": qr_code_base64
-        })
-        flash("Product added successfully!", "success")
+        # Update the product with the generated QR code
+        products_collection.update_one(
+            {"_id": product_id}, 
+            {"$set": {"qr_code": qr_code_base64}}
+        )
+
+        flash("Product added successfully with a QR code!", "success")
         return redirect(url_for("manufacturer_dashboard"))
 
     products = list(products_collection.find({"manufacturer": username}))
     orders = list(orders_collection.find({"manufacturer": username}))
-    transactions = list(transactions_collection.find({"manufacturer": username}))
-
     transactions = list(transactions_collection.find({"manufacturer": username}))
 
     return render_template("manufacturer_dashboard.html", products=products, orders=orders, transactions=transactions)
@@ -525,32 +542,65 @@ def update_order_status():
                 flash("Product not found in database.", "error")
                 return redirect(url_for("manufacturer_dashboard"))
 
-            product_id = str(product["_id"])  # Convert ObjectId to string
-            int_product_id = int(product_id[:8], 16)  # Convert first 8 characters (hex) to int
-            print(f"🟢 Converted product ID: {int_product_id}")
+            product_id = str(product["_id"])
+            int_product_id = int(product_id[:8], 16)
 
             tx_hash = contract.functions.acceptRequest(int_product_id).transact({'from': web3.eth.default_account})
-
             receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
 
-            print(f"✅ Transaction Successful! Hash: {tx_hash.hex()}")
-
-            if receipt.status == 1:  # ✅ Transaction successful
-                order.pop("_id", None)  # Remove MongoDB _id to prevent duplication
-                order["tx_hash"] = tx_hash.hex()  # Store transaction hash
+            if receipt.status == 1:  
+                order.pop("_id", None)
+                order["tx_hash"] = tx_hash.hex()
                 order["status"] = "Accepted"
+                order["handoff_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
                 transactions_collection.insert_one(order)
-                flash("Transaction recorded on Ethereum blockchain!", "success")
+
+                # Update QR Code with transaction details
+                qr_data = {
+                    "product_name": order["product_name"],
+                    "quantity": product["quantity"],
+                    "weight": product["weight"],
+                    "manufacturer": product["manufacturer"],
+                    "distributor": order["distributor"],
+                    "handoff_date": order["handoff_date"],
+                    "tx_hash": tx_hash.hex(),
+                    "product_id": product_id
+                }
+
+                qr_json = json.dumps(qr_data)
+                qr = qrcode.make(qr_json)
+                buffered = BytesIO()
+                qr.save(buffered, format="PNG")
+                qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+                products_collection.update_one(
+                    {"_id": product["_id"]},
+                    {"$set": {"qr_code": qr_code_base64}}
+                )
+
+                flash("Transaction recorded and QR updated!", "success")
             else:
                 flash("Blockchain transaction failed!", "error")
         except Exception as e:
             flash(f"Blockchain transaction error: {str(e)}", "error")
-            print(f"🔴 Blockchain transaction failed: {str(e)}")
 
     flash(f"Order status updated to {new_status}.", "success")
     return redirect(url_for("manufacturer_dashboard"))
 
+from bson.errors import InvalidId
+
+@app.route("/scan_qr/<product_id>", methods=["GET"])
+def scan_qr(product_id):
+    try:
+        product = products_collection.find_one({"_id": ObjectId(product_id)})
+    except InvalidId:
+        return "Invalid Product ID", 400  # Return a Bad Request error
+
+    if not product:
+        return "Product not found", 404
+
+    return render_template("qr_details.html", product=product)
 
 if __name__ == "__main__":
     app.run(debug=True)
