@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>⚠️ Anomaly Detection</title>
+</head>
+<body>
+    <h2>⚠️ Detected Anomalies in Orders</h2>
+    {% if anomalies %}
+        <table border="1" cellpadding="10">
+            <tr>
+                <th>Product Name</th>
+                <th>Manufacturer</th>
+                <th>Distributor</th>
+                <th>Timestamp</th>
+            </tr>
+            {% for anomaly in anomalies %}
+            <tr>
+                <td>{{ anomaly['product_name'] }}</td>
+                <td>{{ anomaly['manufacturer'] }}</td>
+                <td>{{ anomaly['distributor'] }}</td>
+                <td>{{ anomaly['timestamp'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No anomalies detected.</p>
+    {% endif %}
+</body>
+</html>

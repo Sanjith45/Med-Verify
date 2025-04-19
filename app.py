@@ -8,6 +8,12 @@ import base64
 from io import BytesIO
 import json
 import time
+from datetime import datetime
+import atexit
+
+# Your existing imports
+from datetime import datetime
+from flask import render_template, request, redirect, url_for, session, flash
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
@@ -362,38 +368,41 @@ def manufacturer_dashboard():
 
     username = session["username"]
 
+    # Check and expire any outdated products (optional call)
+    check_and_expire_products()  # <- only if you want to run expiry check here
+
     if request.method == "POST":
         product_name = request.form["product_name"]
         quantity = int(request.form["quantity"])
         weight = request.form["weight"]
-        
-        # Store the product in the database first to get the _id
+        expiry_date = request.form["expiry_date"]
+
         product_id = products_collection.insert_one({
             "name": product_name,
             "quantity": quantity,
             "weight": weight,
-            "manufacturer": username
+            "manufacturer": username,
+            "expiry_date": expiry_date,
+            "status": "active"  # ✅ Include status here
         }).inserted_id
 
-        # Create QR Code Data
         qr_data = {
             "product_name": product_name,
             "quantity": quantity,
             "weight": weight,
             "manufacturer": username,
-            "handoff_date": None,  # This will be updated when the transaction is confirmed
-            "tx_hash": None,  # This will be updated later
+            "expiry_date": expiry_date,
+            "handoff_date": None,
+            "tx_hash": None,
             "product_id": str(product_id)
         }
 
-        # Generate QR Code
-        qr_json = json.dumps(qr_data)  # Convert dictionary to JSON string
+        qr_json = json.dumps(qr_data)
         qr = qrcode.make(qr_json)
         buffered = BytesIO()
         qr.save(buffered, format="PNG")
         qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        # Update the product with the generated QR code
         products_collection.update_one(
             {"_id": product_id}, 
             {"$set": {"qr_code": qr_code_base64}}
@@ -402,11 +411,19 @@ def manufacturer_dashboard():
         flash("Product added successfully with a QR code!", "success")
         return redirect(url_for("manufacturer_dashboard"))
 
+    # ✅ Fetch data for dashboard
     products = list(products_collection.find({"manufacturer": username}))
     orders = list(orders_collection.find({"manufacturer": username}))
     transactions = list(transactions_collection.find({"manufacturer": username}))
 
-    return render_template("manufacturer_dashboard.html", products=products, orders=orders, transactions=transactions)
+    # ✅ Fetch latest notifications
+    notifications = manufacturer_notifications.find({"username": username}).sort("timestamp", -1)
+
+    return render_template("manufacturer_dashboard.html",
+                           products=products,
+                           orders=orders,
+                           transactions=transactions,
+                           notifications=notifications)
 
 
 @app.route("/distributor_dashboard")
@@ -511,6 +528,7 @@ def view_transactions():
             "manufacturer": db_tx["manufacturer"],
             "distributor": db_tx["distributor"],
             "product_name": db_tx["product_name"],
+            "expiry_date":db_tx["expiry_date"],
             "status": db_tx["status"],
             "value": eth_tx["value"] if eth_tx else "N/A",
             "block": eth_tx["block"] if eth_tx else "N/A",
@@ -537,56 +555,56 @@ def update_order_status():
 
     if new_status == "Accepted":
         try:
-            product = products_collection.find_one({"name": order["product_name"], "manufacturer": order["manufacturer"]})
+            product = products_collection.find_one({
+                "name": order["product_name"],
+                "manufacturer": order["manufacturer"]
+            })
+
             if not product:
                 flash("Product not found in database.", "error")
                 return redirect(url_for("manufacturer_dashboard"))
 
+            # Use MongoDB _id as product ID for blockchain
             product_id = str(product["_id"])
-            int_product_id = int(product_id[:8], 16)
+            blockchain_product_id = int(ObjectId(product_id).binary.hex(), 16) % (10**9)  # Simplified mapping
 
-            tx_hash = contract.functions.acceptRequest(int_product_id).transact({'from': web3.eth.default_account})
+            tx_hash = contract.functions.acceptRequest(blockchain_product_id).transact({'from': web3.eth.default_account})
             receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
 
-            if receipt.status == 1:  
-                order.pop("_id", None)
-                order["tx_hash"] = tx_hash.hex()
-                order["status"] = "Accepted"
-                order["handoff_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
-
-                transactions_collection.insert_one(order)
-
-                # Update QR Code with transaction details
-                qr_data = {
+            if receipt.status == 1:
+                # Record the transaction in MongoDB
+                transactions_collection.insert_one({
                     "product_name": order["product_name"],
-                    "quantity": product["quantity"],
-                    "weight": product["weight"],
-                    "manufacturer": product["manufacturer"],
+                    "manufacturer": order["manufacturer"],
                     "distributor": order["distributor"],
-                    "handoff_date": order["handoff_date"],
-                    "tx_hash": tx_hash.hex(),
-                    "product_id": product_id
-                }
+                    "status": "Accepted",
+                    "timestamp": str(time.time()),
+                    "tx_hash": tx_hash.hex()
+                })
 
-                qr_json = json.dumps(qr_data)
-                qr = qrcode.make(qr_json)
-                buffered = BytesIO()
-                qr.save(buffered, format="PNG")
-                qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
+                # Optional: Update QR Code with tx_hash and timestamp
                 products_collection.update_one(
                     {"_id": product["_id"]},
-                    {"$set": {"qr_code": qr_code_base64}}
+                    {"$set": {
+                        "tx_hash": tx_hash.hex(),
+                        "handoff_date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    }}
                 )
 
-                flash("Transaction recorded and QR updated!", "success")
+                flash("Order accepted and blockchain transaction completed!", "success")
             else:
                 flash("Blockchain transaction failed!", "error")
-        except Exception as e:
-            flash(f"Blockchain transaction error: {str(e)}", "error")
 
-    flash(f"Order status updated to {new_status}.", "success")
+        except Exception as e:
+            flash(f"Error processing blockchain transaction: {str(e)}", "error")
+
+    elif new_status == "Rejected":
+        flash("Order has been rejected.", "info")
+    else:
+        flash("Order status updated.", "info")
+
     return redirect(url_for("manufacturer_dashboard"))
+
 
 from bson.errors import InvalidId
 
@@ -601,6 +619,111 @@ def scan_qr(product_id):
         return "Product not found", 404
 
     return render_template("qr_details.html", product=product)
+
+from flask import render_template
+from utils.anomaly_detector import detect_anomalies_from_transactions
+
+# Make sure you have access to orders_collection from MongoDB
+
+@app.route("/anomaly_detection")
+def anomaly_detection():
+    anomalies = detect_anomalies_from_transactions(transactions_collection)
+    return render_template("anomalies.html", anomalies=anomalies)
+
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+
+@app.route('/anomalies')
+def anomalies():
+    orders = list(orders_collection.find())
+    df = pd.DataFrame(orders)
+
+    if df.empty or len(df) < 5:
+        return jsonify([])
+
+    # Safe numeric conversion
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
+    df['weight'] = pd.to_numeric(df['weight'], errors='coerce')
+    df = df.dropna(subset=['quantity', 'weight'])
+
+    if df.empty:
+        return jsonify([])
+
+    features = df[['quantity', 'weight']].values
+
+    # Isolation Forest
+    clf = IsolationForest(contamination='auto', random_state=42)
+    clf.fit(features)
+    df['anomaly'] = clf.predict(features)
+
+    anomalies = df[df['anomaly'] == -1].to_dict(orient='records')
+    for a in anomalies:
+        a['_id'] = str(a['_id'])
+    return jsonify(anomalies)
+
+from datetime import datetime
+from flask import flash
+
+from pymongo import MongoClient
+from datetime import datetime
+
+# Connect to MongoDB
+client = MongoClient("mongodb://localhost:27017/")
+db = client["medverify"]
+
+# Define collections
+products_collection = db["products"]
+manufacturer_notifications = db["manufacturer_notifications"]
+distributor_notifications = db["distributor_notifications"]
+
+# Function to check and expire products
+def check_and_expire_products():
+    today = datetime.today().date()
+
+    products = products_collection.find({"status": "active"})
+
+    for product in products:
+        expiry_str = product.get("expiry_date")
+        expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+
+        if expiry_date < today:
+            products_collection.update_one(
+                {"_id": product["_id"]},
+                {"$set": {"status": "expired"}}
+            )
+
+            # Notify manufacturer and distributor
+            manufacturer = product.get("manufacturer")
+            distributor = product.get("distributor")  # if assigned
+
+            # Use _id for the product ID
+            message = f"⚠️ Product '{product['name']}' (ID: {str(product['_id'])}) expired on {expiry_str}."
+
+            # Store in a notification collection
+            manufacturer_notifications.insert_one({
+                "username": manufacturer,
+                "message": message,
+                "timestamp": datetime.now()
+            })
+
+            if distributor:
+                distributor_notifications.insert_one({
+                    "username": distributor,
+                    "message": message,
+                    "timestamp": datetime.now()
+                })
+
+from apscheduler.schedulers.background import BackgroundScheduler
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=check_and_expire_products, trigger="interval", hours=24)
+scheduler.start()
+
+import atexit
+atexit.register(lambda: scheduler.shutdown())
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)

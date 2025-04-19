@@ -6,7 +6,7 @@
         body {
             font-family: Arial, sans-serif;
         }
-        .form-container, .product-container {
+        .form-container, .product-container, .notification-container {
             margin: 20px;
         }
         table {
@@ -28,6 +28,22 @@
         button:hover {
             background-color: #45a049;
         }
+
+        .notification-container {
+            margin: 20px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            border-radius: 5px;
+            color: #856404;
+        }
+        .notification-container ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .notification-container li {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -35,10 +51,11 @@
     
     <div class="form-container">
         <h2>Add Product</h2>
-        <form method="post">
-            <input type="text" name="product_name" placeholder="Product Name" required><br><br>
-            <input type="number" name="quantity" placeholder="Quantity" required><br><br>
-            <input type="text" name="weight" placeholder="Weight" required><br><br>
+        <form method="POST" action="/manufacturer_dashboard">
+            <input type="text" name="product_name" placeholder="Product Name" required>
+            <input type="number" name="quantity" placeholder="Quantity" required>
+            <input type="text" name="weight" placeholder="Weight" required>
+            <input type="date" name="expiry_date" required>  <!-- New Field -->
             <button type="submit">Add Product</button>
         </form>
     </div>
@@ -50,6 +67,7 @@
                 <th>Product Name</th>
                 <th>Quantity</th>
                 <th>Weight</th>
+                <th>Expiry Date</th>
                 <th>QR Code</th>
             </tr>
             {% for product in products %}
@@ -57,17 +75,29 @@
                 <td>{{ product.name }}</td>
                 <td>{{ product.quantity }}</td>
                 <td>{{ product.weight }}</td>
+                <td>{{ product.expiry_date }}</td>
                 <td>
-                        {% if product.qr_code %}
-                            <img src="data:image/png;base64,{{ product.qr_code }}" alt="QR Code" width="100">
-                        {% else %}
-                            No QR Code
-                        {% endif %}
+                    {% if product.qr_code %}
+                        <img src="data:image/png;base64,{{ product.qr_code }}" alt="QR Code" width="100">
+                    {% else %}
+                        No QR Code
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
         </table>
-        
+    </div>
+
+    <!-- Notifications Section -->
+    <div class="notification-container">
+        <h2>🔔 Notifications</h2>
+        <ul>
+            {% for note in notifications %}
+                <li><strong>{{ note.timestamp.strftime('%Y-%m-%d %H:%M') }}</strong> - {{ note.message }}</li>
+            {% else %}
+                <li>No notifications yet.</li>
+            {% endfor %}
+        </ul>
     </div>
 
     <div class="order-container">
@@ -96,25 +126,30 @@
                 </td>
             </tr>
             {% endfor %}
-            
         </table>
     </div>
-    <h2>Transaction History:</h2>
-<table>
-    <tr>
-        <th>Distributor</th>
-        <th>Product Name</th>
-        <th>Status</th>
-    </tr>
-    {% for transaction in transactions %}
-    <tr>
-        <td>{{ transaction.distributor }}</td>
-        <td>{{ transaction.product_name }}</td>
-        <td>{{ transaction.status }}</td>
-    </tr>
-    {% endfor %}
-</table>
 
+    <h2>Transaction History:</h2>
+    <table>
+        <tr>
+            <th>Distributor</th>
+            <th>Product Name</th>
+            <th>Status</th>
+        </tr>
+        {% for transaction in transactions %}
+        <tr>
+            <td>{{ transaction.distributor }}</td>
+            <td>{{ transaction.product_name }}</td>
+            <td>{{ transaction.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <div class="dashboard-actions">
+        <a href="/place_order"><button>🛒 Place Order</button></a>
+        <a href="/order_history"><button>📦 Order History</button></a>
+        <a href="/anomaly_detection"><button>🚨 View Anomalies</button></a>
+    </div>
 
     <a href="{{ url_for('home') }}" class="button">Return to Home</a>
 </body>
