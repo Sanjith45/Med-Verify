@@ -10,6 +10,8 @@ import json
 import time
 from datetime import datetime
 import atexit
+import cv2
+import numpy as np
 
 # Your existing imports
 from datetime import datetime
@@ -378,13 +380,15 @@ def manufacturer_dashboard():
         expiry_date = request.form["expiry_date"]
 
         product_id = products_collection.insert_one({
-            "name": product_name,
-            "quantity": quantity,
-            "weight": weight,
-            "manufacturer": username,
-            "expiry_date": expiry_date,
-            "status": "active"  # ✅ Include status here
+        "name": product_name,
+        "quantity": quantity,
+        "weight": weight,
+        "manufacturer": username,
+        "owner": username,  # 👈 NEW LINE
+        "expiry_date": expiry_date,
+        "status": "active"
         }).inserted_id
+
 
         qr_data = {
             "product_name": product_name,
@@ -435,7 +439,12 @@ def distributor_dashboard():
     username = session["username"]
 
     # Fetch all available products (excluding accepted orders)
-    products = list(products_collection.find())
+    products = list(products_collection.find({
+    "owner": {"$ne": username},  # Show products not owned by current distributor
+    "status": "active"
+}))
+
+    incoming_orders = list(orders_collection.find({"seller": username}))
 
     filtered_products = []
     for product in products:
@@ -449,9 +458,12 @@ def distributor_dashboard():
 
     # Fetch Distributor's Accepted Orders
     purchases = list(orders_collection.find({"distributor": username, "status": "Accepted"}))
+    return render_template("distributor_dashboard.html", 
+                       products=filtered_products, 
+                       purchases=purchases,
+                       incoming_orders=incoming_orders)  # 👈 new
 
-    return render_template("distributor_dashboard.html", products=filtered_products, purchases=purchases)
-
+# User dashboard
 # User dashboard
 @app.route("/user_dashboard")
 def user_dashboard():
@@ -485,11 +497,13 @@ def place_order():
 
     if product:
         order = {
-            "product_name": product["name"],
-            "manufacturer": product["manufacturer"],
-            "distributor": distributor,
-            "status": "Pending",
+        "product_name": product["name"],
+        "manufacturer": product.get("manufacturer"),  # may be None if sold by distributor
+        "distributor": distributor,
+        "seller": product["owner"],  # 👈 key addition
+        "status": "Pending",
         }
+
         orders_collection.insert_one(order)  # ✅ Store in orders_collection, not transactions_collection
         flash("Order placed successfully!", "success")
 
@@ -546,7 +560,13 @@ def update_order_status():
     order = orders_collection.find_one({"_id": ObjectId(order_id)})
     if not order:
         flash("Order not found.", "error")
-        return redirect(url_for("manufacturer_dashboard"))
+        return redirect(url_for("home"))
+
+# Check that the current user is the seller
+    if order.get("seller") != session.get("username"):
+        flash("Unauthorized action.", "error")
+        return redirect(url_for("home"))
+
 
     orders_collection.update_one(
         {"_id": ObjectId(order_id)},
@@ -557,7 +577,7 @@ def update_order_status():
         try:
             product = products_collection.find_one({
                 "name": order["product_name"],
-                "manufacturer": order["manufacturer"]
+                "owner": order["seller"]  # seller can be manufacturer or distributor
             })
 
             if not product:
@@ -587,8 +607,10 @@ def update_order_status():
                     {"_id": product["_id"]},
                     {"$set": {
                         "tx_hash": tx_hash.hex(),
-                        "handoff_date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                        "handoff_date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                        "owner": order["distributor"]  # 👈 NEW: Transfer ownership
                     }}
+
                 )
 
                 flash("Order accepted and blockchain transaction completed!", "success")
@@ -603,7 +625,11 @@ def update_order_status():
     else:
         flash("Order status updated.", "info")
 
-    return redirect(url_for("manufacturer_dashboard"))
+    if session["role"] == "Manufacturer":
+        return redirect(url_for("manufacturer_dashboard"))
+    else:
+        return redirect(url_for("distributor_dashboard"))
+
 
 
 from bson.errors import InvalidId
@@ -619,6 +645,7 @@ def scan_qr(product_id):
         return "Product not found", 404
 
     return render_template("qr_details.html", product=product)
+
 
 from flask import render_template
 from utils.anomaly_detector import detect_anomalies_from_transactions
@@ -723,6 +750,26 @@ scheduler.start()
 import atexit
 atexit.register(lambda: scheduler.shutdown())
 
+@app.route("/scan_qr_from_image", methods=["POST"])
+def scan_qr_from_image():
+    if "qr_image" not in request.files:
+        return jsonify({"error": "No image uploaded."})
+
+    file = request.files["qr_image"]
+    npimg = np.frombuffer(file.read(), np.uint8)
+    img = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+
+    detector = cv2.QRCodeDetector()
+    data, bbox, _ = detector.detectAndDecode(img)
+
+    if bbox is not None and data:
+        try:
+            qr_info = json.loads(data)  # Convert JSON string to dictionary
+            return jsonify(qr_info)  # ✅ Return all details
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid QR code format!"})
+    else:
+        return jsonify({"error": "No QR code found!"})
 
 
 if __name__ == "__main__":

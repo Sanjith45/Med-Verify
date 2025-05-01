@@ -34,51 +34,85 @@
     <h2>Available Products:</h2>
     <table>
         <tr>
-            <th>Manufacturer</th>
             <th>Product Name</th>
             <th>Quantity</th>
             <th>Weight</th>
+            <th>Owner</th>
             <th>Status</th>
             <th>Action</th>
         </tr>
         {% for product in products %}
-<tr>
-    <td>{{ product.manufacturer }}</td>
-    <td>{{ product.name }}</td>
-    <td>{{ product.quantity }}</td>
-    <td>{{ product.weight }}</td>
-    <td>
-        {% if product.status == "Pending" %}
-            <button disabled style="background-color: gray;">Pending</button>
-        {% elif product.status == "Accepted" %}
-            <button disabled style="background-color: green;">Accepted</button>
-        {% elif product.status == "Rejected" %}
-            <button disabled style="background-color: red;">Rejected</button>
-        {% else %}
-            <form action="{{ url_for('place_order') }}" method="post">
-                <input type="hidden" name="product_id" value="{{ product._id }}">
-                <button type="submit">Purchase</button>
-            </form>
-        {% endif %}
-    </td>
-</tr>
-{% endfor %}
-
+        <tr>
+            <td>{{ product.name }}</td>
+            <td>{{ product.quantity }}</td>
+            <td>{{ product.weight }}</td>
+            <td>
+                {% if product.owner == product.manufacturer %}
+                    Manufacturer ({{ product.manufacturer }})
+                {% else %}
+                    Distributor ({{ product.owner }})
+                {% endif %}
+            </td>
+            <td>
+                {% if product.status == "Pending" %}
+                    <button disabled style="background-color: gray;">Pending</button>
+                {% elif product.status == "Accepted" %}
+                    <button disabled style="background-color: green;">Accepted</button>
+                {% elif product.status == "Rejected" %}
+                    <button disabled style="background-color: red;">Rejected</button>
+                {% else %}
+                    <form action="{{ url_for('place_order') }}" method="post">
+                        <input type="hidden" name="product_id" value="{{ product._id }}">
+                        <button type="submit">Purchase</button>
+                    </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
     </table>
     
     <h2>My Purchases:</h2>
-<table>
-    <tr>
-        <th>Product Name</th>
-        <th>Status</th>
-    </tr>
-    {% for purchase in purchases %}
-    <tr>
-        <td>{{ purchase.product_name }}</td>
-        <td>{{ purchase.status }}</td>
-    </tr>
-    {% endfor %}
-</table>    
+    <table>
+        <tr>
+            <th>Product Name</th>
+            <th>Status</th>
+        </tr>
+        {% for purchase in purchases %}
+        <tr>
+            <td>{{ purchase.product_name }}</td>
+            <td>{{ purchase.status }}</td>
+        </tr>
+        {% endfor %}
+    </table>    
+
+    <h2>Incoming Order Requests:</h2>
+    <table>
+        <tr>
+            <th>Buyer (Distributor)</th>
+            <th>Product Name</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+        {% for order in incoming_orders %}
+        <tr>
+            <td>{{ order.distributor }}</td>
+            <td>{{ order.product_name }}</td>
+            <td>{{ order.status }}</td>
+            <td>
+                {% if order.status == "Pending" %}
+                <form action="{{ url_for('update_order_status') }}" method="post">
+                    <input type="hidden" name="order_id" value="{{ order._id }}">
+                    <button type="submit" name="status" value="Accepted">Accept</button>
+                    <button type="submit" name="status" value="Rejected" style="background-color: red;">Reject</button>
+                </form>
+                {% else %}
+                    {{ order.status }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
     <a href="{{ url_for('home') }}" class="button">Return to Home</a>
 </body>
 </html>
