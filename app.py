@@ -602,16 +602,46 @@ def update_order_status():
                     "tx_hash": tx_hash.hex()
                 })
 
-                # Optional: Update QR Code with tx_hash and timestamp
+                                # Optional: Update QR Code with tx_hash and timestamp
+                                # Step 1: Get existing product data
+                existing_product = products_collection.find_one({"_id": product["_id"]})
+                handoff_history = existing_product.get("handoff_history", [])
+
+                # Step 2: Append new handoff entry
+                handoff_history.append({
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    "from": order["seller"],
+                    "to": order["distributor"],
+                    "tx_hash": tx_hash.hex()
+                })
+
+                # Step 3: Create updated QR data
+                qr_data = {
+                    "product_name": order["product_name"],
+                    "manufacturer": order.get("manufacturer", ""),
+                    "expiry_date": existing_product.get("expiry_date", ""),
+                    "handoff_history": handoff_history,
+                    "product_id": str(product["_id"]),
+                    "current_owner": order["distributor"]
+                }
+
+                qr_json = json.dumps(qr_data)
+                qr = qrcode.make(qr_json)
+                buffered = BytesIO()
+                qr.save(buffered, format="PNG")
+                qr_code_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+                # Step 4: Update MongoDB
                 products_collection.update_one(
                     {"_id": product["_id"]},
                     {"$set": {
-                        "tx_hash": tx_hash.hex(),
-                        "handoff_date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                        "owner": order["distributor"]  # 👈 NEW: Transfer ownership
+                        "owner": order["distributor"],
+                        "handoff_history": handoff_history,
+                        "qr_code": qr_code_base64,
+                        "tx_hash": tx_hash.hex()
                     }}
-
                 )
+
 
                 flash("Order accepted and blockchain transaction completed!", "success")
             else:
