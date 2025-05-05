@@ -1,118 +1,138 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Distributor Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        table th, table td {
-            padding: 8px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-    </style>
-</head>
-<body>
-    <h1>Distributor Dashboard</h1>
-    
-    <h2>Available Products:</h2>
-    <table>
-        <tr>
-            <th>Product Name</th>
-            <th>Quantity</th>
+{% extends "layout.html" %}
+
+{% block title %}Distributor Dashboard - MedVerify{% endblock %}
+
+{% block content %}
+<h1 class="mb-4 text-primary"><i class="bi bi-box-seam me-2"></i>Distributor Dashboard</h1>
+
+<!-- Available Products -->
+<div class="card mb-4">
+  <div class="card-header bg-primary text-white"><i class="bi bi-bag me-2"></i>Available Products</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Product</th>
+            <th>Qty</th>
             <th>Weight</th>
             <th>Owner</th>
             <th>Status</th>
             <th>Action</th>
-        </tr>
-        {% for product in products %}
-        <tr>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr>
             <td>{{ product.name }}</td>
             <td>{{ product.quantity }}</td>
             <td>{{ product.weight }}</td>
             <td>
-                {% if product.owner == product.manufacturer %}
-                    Manufacturer ({{ product.manufacturer }})
-                {% else %}
-                    Distributor ({{ product.owner }})
-                {% endif %}
+              {% if product.owner == product.manufacturer %}
+                <span class="badge bg-info"><i class="bi bi-industry"></i> Manufacturer</span><br>{{ product.manufacturer }}
+              {% else %}
+                <span class="badge bg-secondary"><i class="bi bi-person"></i> Distributor</span><br>{{ product.owner }}
+              {% endif %}
             </td>
             <td>
-                {% if product.status == "Pending" %}
-                    <button disabled style="background-color: gray;">Pending</button>
-                {% elif product.status == "Accepted" %}
-                    <button disabled style="background-color: green;">Accepted</button>
-                {% elif product.status == "Rejected" %}
-                    <button disabled style="background-color: red;">Rejected</button>
-                {% else %}
-                    <form action="{{ url_for('place_order') }}" method="post">
-                        <input type="hidden" name="product_id" value="{{ product._id }}">
-                        <button type="submit">Purchase</button>
-                    </form>
-                {% endif %}
+              {% if product.status == "Pending" %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pending</span>
+              {% elif product.status == "Accepted" %}
+                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Accepted</span>
+              {% elif product.status == "Rejected" %}
+                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Rejected</span>
+              {% else %}
+                <span class="badge bg-secondary"><i class="bi bi-box"></i> Available</span>
+              {% endif %}
             </td>
-        </tr>
-        {% endfor %}
-    </table>
-    
-    <h2>My Purchases:</h2>
-    <table>
+            <td>
+              {% if product.status == "Available" %}
+              <form action="{{ url_for('place_order') }}" method="post">
+                <input type="hidden" name="product_id" value="{{ product._id }}">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-cart-plus"></i> Purchase</button>
+              </form>
+              {% else %}
+                <button class="btn btn-sm btn-outline-secondary" disabled>{{ product.status }}</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- My Purchases -->
+<div class="card mb-4">
+  <div class="card-header bg-success text-white"><i class="bi bi-bag-check"></i> My Purchases</div>
+  <div class="card-body p-0">
+    <table class="table table-striped mb-0">
+      <thead class="table-light">
         <tr>
-            <th>Product Name</th>
-            <th>Status</th>
+          <th>Product</th>
+          <th>Status</th>
+          <th>QR Code</th>
         </tr>
+      </thead>
+      <tbody>
         {% for purchase in purchases %}
         <tr>
-            <td>{{ purchase.product_name }}</td>
-            <td>{{ purchase.status }}</td>
+          <td>{{ purchase.product_name }}</td>
+          <td>{{ purchase.status }}</td>
+          <td>
+            {% set matching_product = (owned_products | selectattr("name", "equalto", purchase.product_name) | list).0 %}
+            {% if matching_product and matching_product.qr_code %}
+              <img src="data:image/png;base64,{{ matching_product.qr_code }}" alt="QR Code" width="80">
+            {% else %}
+              <span class="text-muted">Not Available</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
-    </table>    
+      </tbody>
+    </table>
+  </div>
+</div>
 
-    <h2>Incoming Order Requests:</h2>
-    <table>
+<!-- Incoming Orders -->
+<div class="card mb-5">
+  <div class="card-header bg-warning text-dark"><i class="bi bi-inboxes"></i> Incoming Order Requests</div>
+  <div class="card-body p-0">
+    <table class="table table-striped mb-0">
+      <thead class="table-light">
         <tr>
-            <th>Buyer (Distributor)</th>
-            <th>Product Name</th>
-            <th>Status</th>
-            <th>Action</th>
+          <th>Buyer</th>
+          <th>Product</th>
+          <th>Status</th>
+          <th>Action</th>
         </tr>
+      </thead>
+      <tbody>
         {% for order in incoming_orders %}
         <tr>
-            <td>{{ order.distributor }}</td>
-            <td>{{ order.product_name }}</td>
-            <td>{{ order.status }}</td>
-            <td>
-                {% if order.status == "Pending" %}
-                <form action="{{ url_for('update_order_status') }}" method="post">
-                    <input type="hidden" name="order_id" value="{{ order._id }}">
-                    <button type="submit" name="status" value="Accepted">Accept</button>
-                    <button type="submit" name="status" value="Rejected" style="background-color: red;">Reject</button>
-                </form>
-                {% else %}
-                    {{ order.status }}
-                {% endif %}
-            </td>
+          <td>{{ order.distributor }}</td>
+          <td>{{ order.product_name }}</td>
+          <td>{{ order.status }}</td>
+          <td>
+            {% if order.status == "Pending" %}
+            <form action="{{ url_for('update_order_status') }}" method="post" class="d-flex gap-2">
+              <input type="hidden" name="order_id" value="{{ order._id }}">
+              <button type="submit" name="status" value="Accepted" class="btn btn-success btn-sm">
+                <i class="bi bi-check-lg"></i> Accept
+              </button>
+              <button type="submit" name="status" value="Rejected" class="btn btn-danger btn-sm">
+                <i class="bi bi-x-lg"></i> Reject
+              </button>
+            </form>
+            {% else %}
+              <span class="text-muted">{{ order.status }}</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
+      </tbody>
     </table>
-
-    <a href="{{ url_for('home') }}" class="button">Return to Home</a>
-</body>
-</html>
+  </div>
+</div>
+{% endblock %}

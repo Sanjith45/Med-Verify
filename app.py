@@ -458,10 +458,14 @@ def distributor_dashboard():
 
     # Fetch Distributor's Accepted Orders
     purchases = list(orders_collection.find({"distributor": username, "status": "Accepted"}))
-    return render_template("distributor_dashboard.html", 
-                       products=filtered_products, 
-                       purchases=purchases,
-                       incoming_orders=incoming_orders)  # 👈 new
+    owned_products = list(products_collection.find({"owner": username}))
+
+    return render_template("distributor_dashboard.html",
+    products=filtered_products,
+    purchases=purchases,
+    incoming_orders=incoming_orders,
+    owned_products=owned_products  # 👈 New
+)
 
 # User dashboard
 # User dashboard

@@ -1,121 +1,131 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        table { width: 80%; margin: 20px auto; border-collapse: collapse; }
-        th, td { border: 1px solid black; padding: 10px; text-align: left; }
-        video { width: 100%; max-width: 500px; }
-    </style>
-</head>
-<body>
+{% extends "layout.html" %}
 
-    <h2>Welcome, {{ session['username'] }}</h2>
+{% block title %}User Dashboard - MedVerify{% endblock %}
 
-    <button onclick="startCamera()">Scan QR Code</button>
-    <input type="file" id="fileInput" accept="image/*" onchange="uploadQR()">
-    
-    <video id="camera" style="display:none;" autoplay></video>
-    <canvas id="qrCanvas" style="display:none;"></canvas>
+{% block content %}
+<h2 class="mb-4 text-primary text-center"><i class="bi bi-person-badge me-2"></i>Welcome, {{ session['username'] }}</h2>
 
-    <h3>Scanned QR Code Details</h3>
-    <table id="qrDataTable" style="display: none;">
-        <thead>
-            <tr>
-                <th>Product Name</th>
-                <th>Quantity</th>
-                <th>Weight</th>
-                <th>Manufacturer</th>
-                <th>Distributor</th>
-                <th>Handoff Date</th>
-                <th>Transaction Hash</th>
-                <th>Product ID</th>
-            </tr>
+<div class="d-flex justify-content-center gap-3 mb-4 flex-wrap">
+  <button onclick="startCamera()" class="btn btn-outline-success">
+    <i class="bi bi-camera-video"></i> Scan QR via Camera
+  </button>
+
+  <label class="btn btn-outline-secondary">
+    <i class="bi bi-upload"></i> Upload QR Image
+    <input type="file" id="fileInput" accept="image/*" onchange="uploadQR()" hidden>
+  </label>
+</div>
+
+<!-- Video Camera Stream -->
+<div class="text-center mb-4">
+  <video id="camera" class="border rounded" style="display:none; max-width: 100%; height: auto;" autoplay></video>
+  <canvas id="qrCanvas" style="display:none;"></canvas>
+</div>
+
+<!-- Scanned QR Details -->
+<div class="card shadow mb-5" id="qrDetailsCard" style="display: none;">
+  <div class="card-header bg-info text-white">
+    <i class="bi bi-upc-scan"></i> Scanned QR Code Details
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Product Name</th>
+            <th>Quantity</th>
+            <th>Weight</th>
+            <th>Manufacturer</th>
+            <th>Distributor</th>
+            <th>Handoff Date</th>
+            <th>Transaction Hash</th>
+            <th>Product ID</th>
+          </tr>
         </thead>
         <tbody id="qrDataBody"></tbody>
-    </table>
+      </table>
+    </div>
+  </div>
+</div>
 
-    <script>
-        let videoStream;
-        let video = document.getElementById("camera");
-        let captureInterval;
-    
-        function startCamera() {
-            video.style.display = "block";
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-                .then(stream => {
-                    videoStream = stream;
-                    video.srcObject = stream;
-                    captureInterval = setInterval(captureFrame, 3000); // 📸 Capture every 3 sec
-                })
-                .catch(err => alert("Camera access denied!"));
-        }
-    
-        function stopCamera() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-            }
-            video.style.display = "none";
-            clearInterval(captureInterval);  // ⏹ Stop capturing
-        }
-    
-        function captureFrame() {
-            let canvas = document.createElement("canvas");
-            let ctx = canvas.getContext("2d");
-    
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            canvas.toBlob(blob => {
-                let formData = new FormData();
-                formData.append("qr_image", blob, "frame.png");
-    
-                fetch("/scan_qr_from_image", { method: "POST", body: formData })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.product_name) { 
-                            displayQRData(data);
-                            stopCamera();  // ✅ Stop once QR is found
-                        }
-                    })
-                    .catch(error => console.error("QR Scan Error:", error));
-            }, "image/png");
-        }
-    
-        function uploadQR() {
-            let file = document.getElementById("fileInput").files[0];
-            let formData = new FormData();
-            formData.append("qr_image", file);
-    
-            fetch("/scan_qr_from_image", { method: "POST", body: formData })
-                .then(response => response.json())
-                .then(data => displayQRData(data))
-                .catch(error => alert("Error scanning QR code."));
-        }
-    
-        function displayQRData(data) {
-            if (data.error) { alert(data.error); return; }
-            let tbody = document.getElementById("qrDataBody");
-            tbody.innerHTML = `
-                <tr>
-                    <td>${data.product_name}</td>
-                    <td>${data.quantity}</td>
-                    <td>${data.weight}</td>
-                    <td>${data.manufacturer}</td>
-                    <td>${data.distributor}</td>
-                    <td>${data.handoff_date}</td>
-                    <td>${data.tx_hash}</td>
-                    <td>${data.product_id}</td>
-                </tr>
-            `;
-            document.getElementById("qrDataTable").style.display = "block";
-        }
-    </script>
-    
-</body>
-</html>
+<script>
+  let videoStream;
+  let video = document.getElementById("camera");
+  let captureInterval;
+
+  function startCamera() {
+    video.style.display = "block";
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => {
+        videoStream = stream;
+        video.srcObject = stream;
+        captureInterval = setInterval(captureFrame, 3000);
+      })
+      .catch(err => alert("Camera access denied!"));
+  }
+
+  function stopCamera() {
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+    }
+    video.style.display = "none";
+    clearInterval(captureInterval);
+  }
+
+  function captureFrame() {
+    let canvas = document.createElement("canvas");
+    let ctx = canvas.getContext("2d");
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(blob => {
+      let formData = new FormData();
+      formData.append("qr_image", blob, "frame.png");
+
+      fetch("/scan_qr_from_image", { method: "POST", body: formData })
+        .then(response => response.json())
+        .then(data => {
+          if (data.product_name) {
+            displayQRData(data);
+            stopCamera();
+          }
+        })
+        .catch(error => console.error("QR Scan Error:", error));
+    }, "image/png");
+  }
+
+  function uploadQR() {
+    let file = document.getElementById("fileInput").files[0];
+    let formData = new FormData();
+    formData.append("qr_image", file);
+
+    fetch("/scan_qr_from_image", { method: "POST", body: formData })
+      .then(response => response.json())
+      .then(data => displayQRData(data))
+      .catch(error => alert("Error scanning QR code."));
+  }
+
+  function displayQRData(data) {
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+    let tbody = document.getElementById("qrDataBody");
+    tbody.innerHTML = `
+      <tr>
+        <td>${data.product_name}</td>
+        <td>${data.quantity || "N/A"}</td>
+        <td>${data.weight || "N/A"}</td>
+        <td>${data.manufacturer}</td>
+        <td>${data.distributor || data.current_owner}</td>
+        <td>${data.handoff_date || "N/A"}</td>
+        <td>${data.tx_hash || "N/A"}</td>
+        <td>${data.product_id}</td>
+      </tr>
+    `;
+    document.getElementById("qrDetailsCard").style.display = "block";
+  }
+</script>
+{% endblock %}

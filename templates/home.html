@@ -1,28 +1,51 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <title>Home</title>
-</head>
-<body>
-<div class="container">
-    <h1>Welcome to the Portal</h1>
-    
-    <!-- Manufacturer Option -->
-    <div class="option">
-        <a href="/manufacturer/signup" class="btn">Manufacturer</a>
-    </div>
+{% extends "layout.html" %}
 
-    <!-- User Option -->
-    <div class="option">
-        
-        <a href="/user/signup" class="btn">User</a>
-    </div>
+{% block title %}Home - MedVerify{% endblock %}
 
-    <!-- Distributor Option -->
-    <div class="option">
-        <a href="/distributor/signup" class="btn">Distributor</a>
+{% block content %}
+<style>
+  .role-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 15px;
+  }
+  .role-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  }
+</style>
+
+<div class="text-center my-5">
+  <h1 class="mb-4 text-primary"><i class="bi bi-shield-check"></i> Welcome to <strong>MedVerify</strong></h1>
+  <p class="lead mb-5 text-muted">Select your role to begin your journey in secure medicine verification.</p>
+
+  <div class="row justify-content-center g-4">
+    <div class="col-md-4">
+      <div class="card role-card shadow-sm text-center">
+        <div class="card-body">
+          <i class="bi bi-gear-wide-connected display-4 text-primary"></i>
+          <h5 class="mt-3">Manufacturer</h5>
+          <a href="/manufacturer/signup" class="btn btn-outline-primary mt-2">Get Started</a>
+        </div>
+      </div>
     </div>
+    <div class="col-md-4">
+      <div class="card role-card shadow-sm text-center">
+        <div class="card-body">
+          <i class="bi bi-truck display-4 text-success"></i>
+          <h5 class="mt-3">Distributor</h5>
+          <a href="/distributor/signup" class="btn btn-outline-success mt-2">Get Started</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card role-card shadow-sm text-center">
+        <div class="card-body">
+          <i class="bi bi-person-lines-fill display-4 text-dark"></i>
+          <h5 class="mt-3">User</h5>
+          <a href="/user/signup" class="btn btn-outline-dark mt-2">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-</body>
-</html>
+{% endblock %}

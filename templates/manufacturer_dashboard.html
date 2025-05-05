@@ -1,156 +1,163 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Manufacturer Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        .form-container, .product-container, .notification-container {
-            margin: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        table th, table td {
-            padding: 8px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
+{% extends "layout.html" %}
 
-        .notification-container {
-            margin: 20px;
-            background-color: #fff3cd;
-            border: 1px solid #ffeeba;
-            padding: 15px;
-            border-radius: 5px;
-            color: #856404;
-        }
-        .notification-container ul {
-            list-style-type: none;
-            padding-left: 0;
-        }
-        .notification-container li {
-            margin-bottom: 10px;
-        }
-    </style>
-</head>
-<body>
-    <h1>Manufacturer Dashboard</h1>
-    
-    <div class="form-container">
-        <h2>Add Product</h2>
-        <form method="POST" action="/manufacturer_dashboard">
-            <input type="text" name="product_name" placeholder="Product Name" required>
-            <input type="number" name="quantity" placeholder="Quantity" required>
-            <input type="text" name="weight" placeholder="Weight" required>
-            <input type="date" name="expiry_date" required>  <!-- New Field -->
-            <button type="submit">Add Product</button>
-        </form>
+{% block title %}Manufacturer Dashboard - MedVerify{% endblock %}
+
+{% block content %}
+<h1 class="mb-4 text-primary"><i class="bi bi-tools me-2"></i>Manufacturer Dashboard</h1>
+
+<!-- Add Product Form -->
+<div class="card mb-4">
+  <div class="card-header bg-primary text-white"><i class="bi bi-plus-circle me-1"></i> Add Product</div>
+  <div class="card-body">
+    <form method="POST" action="/manufacturer_dashboard" class="row g-3">
+      <div class="col-md-3">
+        <input type="text" name="product_name" class="form-control" placeholder="Product Name" required>
+      </div>
+      <div class="col-md-2">
+        <input type="number" name="quantity" class="form-control" placeholder="Quantity" required>
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="weight" class="form-control" placeholder="Weight" required>
+      </div>
+      <div class="col-md-3">
+        <input type="date" name="expiry_date" class="form-control" required>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i> Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Product Table -->
+<div class="card mb-4">
+  <div class="card-header bg-success text-white"><i class="bi bi-boxes"></i> Your Products</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Qty</th>
+            <th>Weight</th>
+            <th>Expiry</th>
+            <th>QR Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr>
+            <td>{{ product.name }}</td>
+            <td>{{ product.quantity }}</td>
+            <td>{{ product.weight }}</td>
+            <td>{{ product.expiry_date }}</td>
+            <td>
+              {% if product.qr_code %}
+              <img src="data:image/png;base64,{{ product.qr_code }}" alt="QR Code" width="100">
+              {% else %}
+              <span class="text-muted">No QR</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
+</div>
 
-    <div class="product-container">
-        <h2>Products:</h2>
-        <table>
-            <tr>
-                <th>Product Name</th>
-                <th>Quantity</th>
-                <th>Weight</th>
-                <th>Expiry Date</th>
-                <th>QR Code</th>
-            </tr>
-            {% for product in products %}
-            <tr>
-                <td>{{ product.name }}</td>
-                <td>{{ product.quantity }}</td>
-                <td>{{ product.weight }}</td>
-                <td>{{ product.expiry_date }}</td>
-                <td>
-                    {% if product.qr_code %}
-                        <img src="data:image/png;base64,{{ product.qr_code }}" alt="QR Code" width="100">
-                    {% else %}
-                        No QR Code
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
+<!-- Notifications -->
+{% if notifications %}
+<div class="alert alert-warning">
+  <h5 class="mb-3"><i class="bi bi-bell-fill me-2"></i>Notifications</h5>
+  <ul class="mb-0">
+    {% for note in notifications %}
+    <li><strong>{{ note.timestamp.strftime('%Y-%m-%d %H:%M') }}</strong> — {{ note.message }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 
-    <!-- Notifications Section -->
-    <div class="notification-container">
-        <h2>🔔 Notifications</h2>
-        <ul>
-            {% for note in notifications %}
-                <li><strong>{{ note.timestamp.strftime('%Y-%m-%d %H:%M') }}</strong> - {{ note.message }}</li>
-            {% else %}
-                <li>No notifications yet.</li>
-            {% endfor %}
-        </ul>
-    </div>
-
-    <div class="order-container">
-        <h2>Order Requests:</h2>
-        <table>
-            <tr>
-                <th>Distributor</th>
-                <th>Product Name</th>
-                <th>Action</th>
-            </tr>
-            {% for order in orders %}
-            <tr>
-                <td>{{ order.distributor }}</td>
-                <td>{{ order.product_name }}</td>
-                <td>{{ order.quantity }}</td>
-                <td>{{ order.weight }}</td>
-                <td>{{ order.status }}</td>
-                <td>
-                    {% if order.status == "Pending" %}
-                        <form action="{{ url_for('update_order_status') }}" method="post">
-                            <input type="hidden" name="order_id" value="{{ order._id }}">
-                            <button type="submit" name="status" value="Accepted">Accept</button>
-                            <button type="submit" name="status" value="Rejected" style="background-color: red;">Reject</button>
-                        </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
-
-    <h2>Transaction History:</h2>
-    <table>
-        <tr>
+<!-- Orders -->
+<div class="card mb-4">
+  <div class="card-header bg-warning text-dark"><i class="bi bi-basket"></i> Order Requests</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
             <th>Distributor</th>
-            <th>Product Name</th>
+            <th>Name</th>
+            <th>Qty</th>
+            <th>Weight</th>
             <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+          <tr>
+            <td>{{ order.distributor }}</td>
+            <td>{{ order.product_name }}</td>
+            <td>{{ order.quantity }}</td>
+            <td>{{ order.weight }}</td>
+            <td>{{ order.status }}</td>
+            <td>
+              {% if order.status == "Pending" %}
+              <form action="{{ url_for('update_order_status') }}" method="post" class="d-flex gap-2">
+                <input type="hidden" name="order_id" value="{{ order._id }}">
+                <button type="submit" name="status" value="Accepted" class="btn btn-sm btn-success">
+                  <i class="bi bi-check2-circle"></i> Accept
+                </button>
+                <button type="submit" name="status" value="Rejected" class="btn btn-sm btn-danger">
+                  <i class="bi bi-x-circle"></i> Reject
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction History -->
+<div class="card mb-5">
+  <div class="card-header bg-dark text-white"><i class="bi bi-clock-history"></i> Transaction History</div>
+  <div class="card-body p-0">
+    <table class="table table-striped mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Distributor</th>
+          <th>Product</th>
+          <th>Status</th>
         </tr>
+      </thead>
+      <tbody>
         {% for transaction in transactions %}
         <tr>
-            <td>{{ transaction.distributor }}</td>
-            <td>{{ transaction.product_name }}</td>
-            <td>{{ transaction.status }}</td>
+          <td>{{ transaction.distributor }}</td>
+          <td>{{ transaction.product_name }}</td>
+          <td>{{ transaction.status }}</td>
         </tr>
         {% endfor %}
+      </tbody>
     </table>
+  </div>
+</div>
 
-    <div class="dashboard-actions">
-        <a href="/place_order"><button>🛒 Place Order</button></a>
-        <a href="/order_history"><button>📦 Order History</button></a>
-        <a href="/anomaly_detection"><button>🚨 View Anomalies</button></a>
-    </div>
-
-    <a href="{{ url_for('home') }}" class="button">Return to Home</a>
-</body>
-</html>
+<!-- Dashboard Actions -->
+<div class="d-flex justify-content-start gap-3 mb-5">
+  <a href="/place_order" class="btn btn-outline-primary">
+    <i class="bi bi-cart4"></i> Place Order
+  </a>
+  <a href="/order_history" class="btn btn-outline-secondary">
+    <i class="bi bi-archive"></i> Order History
+  </a>
+  <a href="/anomaly_detection" class="btn btn-outline-danger">
+    <i class="bi bi-exclamation-triangle"></i> View Anomalies
+  </a>
+</div>
+{% endblock %}
