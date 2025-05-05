@@ -16,11 +16,14 @@ import numpy as np
 # Your existing imports
 from datetime import datetime
 from flask import render_template, request, redirect, url_for, session, flash
+from datetime import timedelta
+
+
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 bcrypt = Bcrypt(app)
-
+app.permanent_session_lifetime = timedelta(days=7)  # Session lasts 7 days
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017/")
 db = client["auth_app"]
@@ -238,6 +241,7 @@ def manufacturer_login():
 
         user = manufacturers_collection.find_one({"username": username})
         if user and bcrypt.check_password_hash(user["password"], password):
+            session.permanent = True
             session["role"] = "Manufacturer"
             session["username"] = username
             flash(f"Welcome, {username}! You are logged in as Manufacturer.", "success")
@@ -282,6 +286,7 @@ def distributor_login():
 
         user = distributors_collection.find_one({"username": username})
         if user and bcrypt.check_password_hash(user["password"], password):
+            session.permanent = True
             session["role"] = "Distributor"
             session["username"] = username
             flash(f"Welcome, {username}! You are logged in as Distributor.", "success")
@@ -326,6 +331,7 @@ def user_login():
 
         user = users_collection.find_one({"username": username})
         if user and bcrypt.check_password_hash(user["password"], password):
+            session.permanent = True
             session["role"] = "User"
             session["username"] = username
             flash(f"Welcome, {username}! You are logged in as User.", "success")
@@ -665,6 +671,11 @@ def update_order_status():
         return redirect(url_for("distributor_dashboard"))
 
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "info")
+    return redirect(url_for("home"))
 
 from bson.errors import InvalidId
 
